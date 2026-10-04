@@ -1,6 +1,6 @@
 ---
-title: "Reproducibility Report for Study X by Sample & Sample (20xx, Psychological Science)"
-author: "Reproducibility Project Author[s] (contact information)"
+title: "Reproducibility Report for Study by De la Fuente et al. (2021, Psychological Science)"
+author: "Fei Xu"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 format:
   html:
@@ -18,17 +18,17 @@ format:
 
 ### Justification for choice of study
 
-Please describe why you chose to reproduce the results of this study.
+  De la Fuente et al. (2021) investigates how wild marmosets adjust their foraging partner choices and strength of foraging associations with their conspecifics under varied food availability. The authors manipulated the abundance and distribution of food resources to look at how the marmosets of different sex, hierarchy, and age interact with each other. Among many of their hypothesis, I would like to focus on two of them that involve juveniles: (a)social tolerance towards juveniles is high as juveniles would share a feeding site with a greater number of group members and for greater proportion of time than adults, and (b) dyads composed of an adult and a juvenile will spend greater proportions of time sharing a feeding site than dyads composed of two adults. These two hypothesis align with my broad research interest on marmoset development, focusing particularly how different parent-infant/helper-offspring interactions contribute to offspring behavioral and brain development. The adult-juvenile interaction from this study can provide me with insights into the flexibility of social tolerance in marmosets. In addition, the study manipulates a large dataset, and simulating the data allows me to learn how to deal with huge database with a wide range of predictor variables. 
 
 ### Anticipated challenges
 
-Do you anticipate running into any challenges when attempting to reproduce these result(s)? If so please, list them here.
+  The original study contains 5 food availability conditions and 2 dataset(individual and dyads). Even though I chose to focus on only two of the many hypothesis, simulation would require me to simulate both datasets. Taking the individual dataset as an example, I will first calculate the node strength and node degree from the original dataset and refit the original GLMMs with the models presented in the paper. Next, I will keep all the original variables (Condition, Session, Group, Individual, Sex, Age, Rank, Food_consumed, Avoidance_events, and Agression_events) for each observation and use the refitted models to predict the expected response for each observation. I will generate node strength values from the predicted binomial probability and node degree values from the predicted Poisson means. Because the authors didn't provide the original code, the reconstructed models may not reproduce the exact original implementation.
 
 ### Links
 
-Project repository (on Github): 
+Project repository (on Github): https://github.com/FeiXu27/DelaFuente2021
 
-Original paper (as hosted in your repo): 
+Original paper (as hosted in your repo): https://github.com/FeiXu27/DelaFuente2021/blob/main/original_paper/Journal%20of%20Animal%20Ecology%20-%202021%20-%20De%20la%20Fuente%20-%20Foraging%20networks%20and%20social%20tolerance%20in%20a%20cooperatively%20breeding.pdf
 
 ## Methods
 
