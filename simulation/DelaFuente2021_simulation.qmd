@@ -26,6 +26,7 @@ library(MCMCglmm)
 ```
 
 ## Read the individual data file
+
 ```{r}
 individual_data <- read.csv2("/Users/fex004/Documents/GitHub/DelaFuente2021/original_paper/IndividualData.csv")
 
@@ -33,6 +34,7 @@ individual_data
 ```
 
 ## Clean the dataset by extracting the variables needed for simulation H1b (Node degree)
+
 ```{r}
 clean_data <- individual_data %>%
   select(Condition, Session, Group, Individual, Sex, Age, Animals_shared)
@@ -41,6 +43,7 @@ clean_data
 ```
 
 ## run original GLMM
+
 ```{r}
 prior <- list(
   G = list(
@@ -65,4 +68,3 @@ node_degree_origin <- MCMCglmm(
 
 summary(node_degree_origin)
 ```
-
