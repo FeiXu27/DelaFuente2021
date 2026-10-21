@@ -1,0 +1,68 @@
+---
+title: "DelaFuente2021_simulation"
+author: "Fei Xu"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+install.packages("MCMCglmm")
+```
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(MCMCglmm)
+```
+
+## Read the individual data file
+```{r}
+individual_data <- read.csv2("/Users/fex004/Documents/GitHub/DelaFuente2021/original_paper/IndividualData.csv")
+
+individual_data
+```
+
+## Clean the dataset by extracting the variables needed for simulation H1b (Node degree)
+```{r}
+clean_data <- individual_data %>%
+  select(Condition, Session, Group, Individual, Sex, Age, Animals_shared)
+
+clean_data
+```
+
+## run original GLMM
+```{r}
+prior <- list(
+  G = list(
+    G1 = list(V = 1, nu = 0.002),
+    G2 = list(V = 1, nu = 0.002)
+  )
+)
+
+set.seed(123)
+
+node_degree_origin <- MCMCglmm(
+  Animals_shared ~ Age + Sex * Condition,
+  random = ~ Group + Session,
+  family = "poisson",
+  data = clean_data,
+  prior = prior,
+  nitt = 230000,
+  burnin = 30000,
+  thin = 200,
+  verbose = FALSE
+)
+
+summary(node_degree_origin)
+```
+
