@@ -41,11 +41,18 @@ Original dataset: https://github.com/FeiXu27/DelaFuente2021/blob/main/original_p
 
 ### Description of the steps required to reproduce the results
 
-Please describe all the steps necessary to reproduce the key result(s) of this study. 
+  First of all, I will refit the original GLMM. I need to clean the dataset by extracting the variables required for H1b and reconstruct individual session numbers with a unique ID. Next, I will fit the original H1b MCMCglmm model (Response variable: node degree; Predictor variables: Age + Sex * Exp_con; Random effects: Groups ID + Daily sessions) with an uninformative prior (V = 1, nu = 0.002).
+  However, because this refitting gives a singular error message of using stronger prior, and several manipulations have demonstrated that the issue is with too many iterations. I will contact the authors to get the original code for the model.
+  To simulate the study, I need to first prepare three new variables ("Group_size", "max_share", and "not_shared") for a Binomial simulation. Next, I will generate new node degree values (Animals_shared) by preserving the Sex * Exp_con effect and setting age effect = 0. Then, I will refit the simulated dataset with two models: first with the same MCMCglmm as the original, and second with the same model but adding Individual ID as another random effect. Finally, I will summarise the model and compare the effects both with the original results and within the simulation. I will define "significant" result as p < 0.05 and 95% CI excluding 0.
 
 ### Differences from original study
 
-Explicitly describe known differences in the analysis pipeline between the original paper and yours (e.g., computing environment). The goal, of course, is to minimize those differences, but differences may occur. Also, note whether such differences are anticipated to influence your ability to reproduce the original results.
+  If the authors can't get back to me with their original code, I might have to either use a smaller iteration or glmer (still open to discussion)?
+  Because my simulation asks whether age effects truly exist in the model and whether the models authors used are robust, there are several differences between my simulation and the original model:
+  1. My simulation data has an effect of 0 for age, while the original model reveals a significant main effect of age.
+  2. My second simulation model includes individual ID as a random effect, while the original model doesn't have it.
+  3. While the original model use Poisson for count data, my simulation will use binomial for the node degree to ensure that simulated data won't exceed maximum. 
+
 
 ## Project Progress Check 1
 

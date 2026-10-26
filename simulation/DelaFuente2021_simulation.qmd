@@ -70,7 +70,7 @@ node_degree_origin <- MCMCglmm(
   nitt = 230000,
   burnin = 30000,
   thin = 200,
-  verbose = FALSE
+  verbose = TRUE
 )
 
 summary(node_degree_origin)
