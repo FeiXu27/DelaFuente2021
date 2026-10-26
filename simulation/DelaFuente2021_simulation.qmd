@@ -5,19 +5,12 @@ format: html
 editor: visual
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
 install.packages("MCMCglmm")
 ```
 
 ```{r}
+library(here)
 library(tidyverse)
 library(lme4)
 library(lmerTest)
@@ -28,18 +21,32 @@ library(MCMCglmm)
 ## Read the individual data file
 
 ```{r}
-individual_data <- read.csv2("/Users/fex004/Documents/GitHub/DelaFuente2021/original_paper/IndividualData.csv")
+individual_data <- read.csv2(here("original_paper", "IndividualData.csv"))
 
 individual_data
 ```
 
-## Clean the dataset by extracting the variables needed for simulation H1b (Node degree)
+## Clean the dataset by extracting the variables needed for simulation H1b (Node degree), added group_size, max_share, and not_shared in the dataset
 
 ```{r}
 clean_data <- individual_data %>%
   select(Condition, Session, Group, Individual, Sex, Age, Animals_shared)
 
-clean_data
+clean_data$Session_ID <- with(
+  clean_data,
+  interaction(Group, Condition, Session, drop = TRUE)
+)
+
+clean_data <- clean_data %>%
+  group_by(Group, Condition) %>%
+  mutate(
+    Group_size = n_distinct(Individual),
+    max_share = Group_size - 1,
+    not_shared = max_share - Animals_shared
+  ) %>%
+  ungroup()
+
+clean_data <- as.data.frame(clean_data)
 ```
 
 ## run original GLMM
@@ -56,7 +63,7 @@ set.seed(123)
 
 node_degree_origin <- MCMCglmm(
   Animals_shared ~ Age + Sex * Condition,
-  random = ~ Group + Session,
+  random = ~ Group + Session_ID,
   family = "poisson",
   data = clean_data,
   prior = prior,
@@ -68,3 +75,4 @@ node_degree_origin <- MCMCglmm(
 
 summary(node_degree_origin)
 ```
+
