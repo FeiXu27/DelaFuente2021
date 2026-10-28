@@ -19,7 +19,6 @@ library(MCMCglmm)
 ```
 
 ## Read the individual data file
-
 ```{r}
 individual_data <- read.csv2(here("original_paper", "IndividualData.csv"))
 
@@ -27,7 +26,6 @@ individual_data
 ```
 
 ## Clean the dataset by extracting the variables needed for simulation H1b (Node degree), added group_size, max_share, and not_shared in the dataset
-
 ```{r}
 clean_data <- individual_data %>%
   select(Condition, Session, Group, Individual, Sex, Age, Animals_shared)
@@ -50,7 +48,6 @@ clean_data <- as.data.frame(clean_data)
 ```
 
 ## run original GLMM
-
 ```{r}
 prior <- list(
   G = list(
