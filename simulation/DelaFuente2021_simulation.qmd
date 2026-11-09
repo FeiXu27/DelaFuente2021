@@ -16,6 +16,7 @@ library(lme4)
 library(lmerTest)
 library(ggplot2)
 library(MCMCglmm)
+library(coda)
 ```
 
 ## Read the individual data file
@@ -47,12 +48,16 @@ clean_data <- clean_data %>%
 clean_data <- as.data.frame(clean_data)
 ```
 
-## run original GLMM
+## run original GLMM (with residual prior)
 ```{r}
+clean_data <- clean_data %>%
+  mutate(across(c(Condition, Sex, Age, Group, Session_ID), factor))
+
 prior <- list(
+  R = list(V = 1, nu = 0.002),          # residual (overdispersion) variance
   G = list(
-    G1 = list(V = 1, nu = 0.002),
-    G2 = list(V = 1, nu = 0.002)
+    G1 = list(V = 1, nu = 0.002),       # Group
+    G2 = list(V = 1, nu = 0.002)        # Session_ID
   )
 )
 
@@ -73,3 +78,389 @@ node_degree_origin <- MCMCglmm(
 summary(node_degree_origin)
 ```
 
+## original GLMM + ID as random
+```{r}
+prior_ID <- list(
+  R = list(V = 1, nu = 0.002),
+  G = list(
+    G1 = list(V = 1, nu = 0.002),
+    G2 = list(V = 1, nu = 0.002), 
+    G3 = list(V = 1, nu = 0.002)   
+  )
+)
+
+set.seed(123)
+
+node_degree_origin_ID <- MCMCglmm(
+  Animals_shared ~ Age + Sex * Condition,
+  random = ~ Group + Session_ID + Individual,
+  family = "poisson",
+  data = clean_data,
+  prior = prior_ID,
+  nitt = 230000,
+  burnin = 30000,
+  thin = 200,
+  verbose = TRUE
+)
+
+summary(node_degree_origin_ID)
+```
+
+
+```{r}
+set.seed(456)
+
+nsim <- 5 ## change to 1000 for final run
+
+individual_var <- 0 #no individual random effect in the generating model
+base_data <- clean_data
+base_data$Individual <- factor(base_data$Individual)
+
+
+# 1. Generating parameters from the original MCMCglmm
+X <- model.matrix(
+  ~ Age + Sex * Condition,
+  data = base_data
+)
+
+# Preserve non-age coefficients
+beta <- colMeans(node_degree_origin$Sol)[colnames(X)]
+
+age_terms <- grep("^Age", names(beta), value = TRUE)
+
+stopifnot(
+  length(age_terms) > 0,
+  nrow(X) == nrow(base_data),
+  all(is.finite(beta))
+)
+
+# Set all Age coefficients to zero
+beta[age_terms] <- 0
+
+# Preserve variance parameters
+v <- colMeans(node_degree_origin$VCV)
+
+variance_terms <- c("Group", "Session_ID", "units")
+
+stopifnot(
+  all(is.finite(v[variance_terms])),
+  all(v[variance_terms] >= 0),
+  length(individual_var) == 1,
+  is.finite(individual_var),
+  individual_var >= 0
+)
+
+upper <- base_data$Group_size - 1
+
+stopifnot(
+  all(is.finite(upper)),
+  all(upper >= 0),
+  all(upper == floor(upper)),
+  all(base_data$max_share == upper),
+  !anyNA(base_data[c("Group", "Session_ID", "Individual")])
+)
+
+
+# 2. Generating simulated data
+# Draw one random intercept per unique ID
+draw_intercepts <- function(id, variance) {
+  id <- as.character(id)
+  ids <- unique(id)
+
+  effects <- setNames(
+    rnorm(length(ids), mean = 0, sd = sqrt(variance)),
+    ids
+  )
+
+  unname(effects[id])
+}
+
+# Generated Animals_shared (<= group-1)
+rtrunc_pois <- function(rate, limit) {
+  if (limit == 0 || rate == 0) return(0)
+
+  values <- seq.int(0, limit)
+
+  log_weights <- dpois(
+    values,
+    lambda = rate,
+    log = TRUE
+  )
+
+  weights <- exp(log_weights - max(log_weights))
+
+  values[
+    sample.int(
+      n = length(values),
+      size = 1L,
+      prob = weights
+    )
+  ]
+}
+
+generate_data <- function() {
+  dat <- base_data
+
+  eta <- drop(X %*% beta) +
+    draw_intercepts(dat$Group, v["Group"]) +
+    draw_intercepts(dat$Session_ID, v["Session_ID"]) +
+    draw_intercepts(dat$Individual, individual_var) +
+    rnorm(nrow(dat), mean = 0, sd = sqrt(v["units"]))
+
+  lambda <- exp(eta)
+
+  stopifnot(all(is.finite(lambda)))
+
+  dat$Animals_shared <- vapply(
+    seq_len(nrow(dat)),
+    function(i) rtrunc_pois(lambda[i], upper[i]),
+    numeric(1)
+  )
+
+  dat$not_shared <- dat$max_share - dat$Animals_shared
+
+  # Verify bounds
+  stopifnot(
+    all(dat$Animals_shared >= 0),
+    all(dat$Animals_shared <= upper),
+    all(dat$not_shared >= 0)
+  )
+
+  # Verify that other columns remain unchanged
+  other_columns <- setdiff(
+    names(base_data),
+    c("Animals_shared", "not_shared")
+  )
+
+  stopifnot(identical(
+    dat[other_columns],
+    base_data[other_columns]
+  ))
+
+  dat
+}
+
+
+# 3. Extracting and summarising Age results
+extract_age <- function(fit, iteration, model_name) {
+  tab <- summary(fit)$solutions
+
+  lower <- tab[age_terms, "l-95% CI"]
+  upper_ci <- tab[age_terms, "u-95% CI"]
+  p <- tab[age_terms, "pMCMC"]
+
+  # Diagnostic flag only: low ESS does not itself prove
+  # non-convergence, and high ESS does not prove convergence
+  min_fixed_ess <- min(coda::effectiveSize(fit$Sol))
+  min_variance_ess <- min(coda::effectiveSize(fit$VCV))
+
+  data.frame(
+    simulation = iteration,
+    model = model_name,
+    term = age_terms,
+    estimate = unname(tab[age_terms, "post.mean"]),
+    lower = unname(lower),
+    upper = unname(upper_ci),
+    pMCMC = unname(p),
+    age_ESS = unname(tab[age_terms, "eff.samp"]),
+    significant = unname(
+      p < 0.05 & (lower > 0 | upper_ci < 0)
+    ),
+    covers_zero = unname(
+      lower <= 0 & upper_ci >= 0
+    ),
+    low_ESS = min(min_fixed_ess, min_variance_ess) < 100,
+    error = NA_character_
+  )
+}
+
+# Record errors
+failed_result <- function(iteration, model_name, error_message) {
+  data.frame(
+    simulation = iteration,
+    model = model_name,
+    term = age_terms,
+    estimate = NA_real_,
+    lower = NA_real_,
+    upper = NA_real_,
+    pMCMC = NA_real_,
+    age_ESS = NA_real_,
+    significant = NA,
+    covers_zero = NA,
+    low_ESS = NA,
+    error = error_message
+  )
+}
+
+safe_mean <- function(x) {
+  if (all(is.na(x))) return(NA_real_)
+  mean(x, na.rm = TRUE)
+}
+
+summarise_performance <- function(results) {
+  results %>%
+    group_by(model, term) %>%
+    summarise(
+      attempted = n(),
+      completed = sum(is.na(error)),
+      failed = sum(!is.na(error)),
+      low_ESS_fits = sum(low_ESS, na.rm = TRUE),
+
+      false_positive_rate = safe_mean(significant),
+      coverage_95 = safe_mean(covers_zero),
+      bias = safe_mean(estimate),
+      RMSE = sqrt(safe_mean(estimate^2)),
+
+      .groups = "drop"
+    ) %>%
+    mutate(
+      failure_rate = failed / attempted,
+
+      # Monte Carlo standard errors across simulated datasets
+      FPR_MCSE = sqrt(
+        false_positive_rate *
+          (1 - false_positive_rate) / completed
+      ),
+
+      coverage_MCSE = sqrt(
+        coverage_95 *
+          (1 - coverage_95) / completed
+      )
+    )
+}
+
+
+# 4. Generate shared batch of simulated datasets
+sim_datasets <- lapply(
+  seq_len(nsim),
+  function(i) generate_data()
+)
+
+# Inspect the first simulated dataset
+head(sim_datasets[[1]])
+
+
+# 5. Fit ORIGINAL MODEL to each simulated dataset
+# Random effects: Group + Session_ID
+
+set.seed(789)
+
+original_list <- vector("list", nsim)
+
+for (i in seq_len(nsim)) {
+
+  original_list[[i]] <- tryCatch({
+
+    fit_original <- MCMCglmm(
+      Animals_shared ~ Age + Sex * Condition,
+      random = ~ Group + Session_ID,
+      family = "poisson",
+      data = sim_datasets[[i]],
+      prior = prior,
+      nitt = 230000,
+      burnin = 30000,
+      thin = 200,
+      verbose = FALSE
+    )
+
+    extract_age(
+      fit = fit_original,
+      iteration = i,
+      model_name = "Original"
+    )
+
+  }, error = function(e) {
+
+    failed_result(
+      iteration = i,
+      model_name = "Original",
+      error_message = conditionMessage(e)
+    )
+
+  })
+
+  if (i %% 10 == 0) {
+    message("Original model: ", i, " / ", nsim)
+  }
+}
+
+results_original <- bind_rows(original_list)
+
+# Present ORIGINAL MODEL results
+performance_original <- summarise_performance(results_original)
+
+print(performance_original, width = Inf)
+
+# Individual simulation results
+head(results_original)
+
+# Failed or low-ESS fits
+diagnostics_original <- results_original %>%
+  filter(!is.na(error) | low_ESS %in% TRUE)
+
+print(diagnostics_original)
+
+
+# 6. Fit ORIGINAL MODEL + INDIVIDUAL
+# Random effects: Group + Session_ID + Individual
+
+set.seed(101112)
+
+individual_list <- vector("list", nsim)
+
+for (i in seq_len(nsim)) {
+
+  individual_list[[i]] <- tryCatch({
+
+    fit_individual <- MCMCglmm(
+      Animals_shared ~ Age + Sex * Condition,
+      random = ~ Group + Session_ID + Individual,
+      family = "poisson",
+      data = sim_datasets[[i]],
+      prior = prior_ID,
+      nitt = 230000,
+      burnin = 30000,
+      thin = 200,
+      verbose = FALSE
+    )
+
+    extract_age(
+      fit = fit_individual,
+      iteration = i,
+      model_name = "Original + Individual"
+    )
+
+  }, error = function(e) {
+
+    failed_result(
+      iteration = i,
+      model_name = "Original + Individual",
+      error_message = conditionMessage(e)
+    )
+
+  })
+
+  if (i %% 10 == 0) {
+    message("Original + Individual: ", i, " / ", nsim)
+  }
+}
+
+results_individual <- bind_rows(individual_list)
+
+
+# Present ORIGINAL MODEL + INDIVIDUAL results
+performance_individual <- summarise_performance(
+  results_individual
+)
+
+print(performance_individual, width = Inf)
+
+# Individual simulation results
+head(results_individual)
+
+# Failed or low-ESS fits
+diagnostics_individual <- results_individual %>%
+  filter(!is.na(error) | low_ESS %in% TRUE)
+
+print(diagnostics_individual)
+```
