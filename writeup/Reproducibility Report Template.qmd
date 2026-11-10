@@ -59,7 +59,7 @@ Original dataset: https://github.com/FeiXu27/DelaFuente2021/blob/main/original_p
 ### Measure of success
 
   The outcome measure for success is the frequency of models detecting a significant age effect when the simulated age effect is set to 0.
-  This outcome is computed by simulating 1000 datasets and fitting them with both the original MCMCglmm and the extended model that adds individual ID in the random effects. For each simulation, significance of age effect is recorded, and the significant value will be used to assess the robustness of the orignal model.
+  This outcome is computed by simulating 100 datasets and fitting them with both the original MCMCglmm and the extended model that adds individual ID in the random effects. For each simulation, significance of age effect is recorded, and the significant value will be used to assess the robustness of the orignal model.
 
 
 ### Pipeline progress
@@ -68,7 +68,7 @@ Original dataset: https://github.com/FeiXu27/DelaFuente2021/blob/main/original_p
   Prior choice: The author didn't respond. By adding residual variance in the prior, the singular error was resolved.
   Data simulation: Done. I used 5 simulation datasets as pilot. The final result will include 1000 datasets. The datasets set age effect equals to 0. However, instead of doing a Binomial simulation, I kept the original Poisson model by adding a limit to the simulated Animals_shared <= group-1 (max_shared).
   Model fitting: Done. Both original and extended MCMCglmm was fitted.
-  Model evaluation: My next step is to use 1000 datasets instead of 5 once the simulation codes works fine.
+  Model evaluation: My next step is to use 100 datasets instead of 5 once the simulation codes works fine.
 
 
 ## Results
