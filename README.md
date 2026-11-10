@@ -9,6 +9,6 @@ The simulation focus on the age effect, looking at how juveniles and adults diff
 # Folders
 original_paper: original paper and dataset used for simulation
   
-writeup: codes for report
+writeup: simulation report
   
-simulation: codes for simulation
+simulation: (RUN THIS) codes for simulation project
