@@ -15,15 +15,18 @@ library(MCMCglmm)
 library(coda)
 ```
 
-## Read the individual data file
+## Data preparation
+### Load file
 ```{r}
 individual_data <- read.csv2(here("original_paper", "IndividualData.csv"))
 
 individual_data
 ```
 
-## Clean the dataset by extracting the variables needed for simulation H1b (Node degree), added group_size, max_share, and not_shared in the dataset
+### Clean dataset
 ```{r}
+# Clean the dataset by extracting the variables needed for simulation H1b (Node degree), added group_size, max_share, and not_shared in the dataset
+
 clean_data <- individual_data %>%
   select(Condition, Session, Group, Individual, Sex, Age, Animals_shared)
 
@@ -44,11 +47,13 @@ clean_data <- clean_data %>%
 clean_data <- as.data.frame(clean_data)
 ```
 
-## run original GLMM (with residual prior)
+## run original GLMM 
+### original model
 ```{r}
 clean_data <- clean_data %>%
   mutate(across(c(Condition, Sex, Age, Group, Session_ID), factor))
 
+# prior with residual prior
 prior <- list(
   R = list(V = 1, nu = 0.002),          # residual (overdispersion) variance
   G = list(
@@ -74,7 +79,7 @@ node_degree_origin <- MCMCglmm(
 summary(node_degree_origin)
 ```
 
-## original GLMM + ID as random
+### original GLMM + ID as random
 ```{r}
 prior_ID <- list(
   R = list(V = 1, nu = 0.002),
@@ -89,7 +94,7 @@ set.seed(123)
 
 node_degree_origin_ID <- MCMCglmm(
   Animals_shared ~ Age + Sex * Condition,
-  random = ~ Group + Session_ID + Individual,
+  random = ~ Group + Session_ID + Individual, # add Individual in the random effects
   family = "poisson",
   data = clean_data,
   prior = prior_ID,
