@@ -6,10 +6,6 @@ editor: visual
 ---
 
 ```{r}
-install.packages("MCMCglmm")
-```
-
-```{r}
 library(here)
 library(tidyverse)
 library(lme4)
