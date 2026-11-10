@@ -1,5 +1,5 @@
 # reproducibility_template
-Template to use for reproducibility projects in PSYCH 251
+Template to use for reproducibility projects in PSYCH 201B
 
 Folders:
   original_paper: original paper and dataset used for simulation
