@@ -6,6 +6,9 @@ editor: visual
 ---
 
 ```{r}
+#| eval: false
+# Run once in the console if MCMCglmm is not installed;
+# installing inside the document re-installs on every render.
 install.packages("MCMCglmm")
 ```
 
