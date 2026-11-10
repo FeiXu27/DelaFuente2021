@@ -102,11 +102,11 @@ node_degree_origin_ID <- MCMCglmm(
 summary(node_degree_origin_ID)
 ```
 
-
+## simulation
 ```{r}
 set.seed(456)
 
-nsim <- 5 ## change to 1000 for final run
+nsim <- 5 ## change to 100 for final run
 
 individual_var <- 0 #no individual random effect in the generating model
 base_data <- clean_data
