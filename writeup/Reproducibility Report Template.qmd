@@ -8,11 +8,7 @@ format:
     toc_depth: 3
 ---
 
-<!-- Reproducibility reports should all use this template to standardize reporting across projects. These reports will be public supplementary materials that accompany the summary report(s) of the aggregate results. -->
-
 ## Introduction
-
-[No abstract is needed.]  Each reproducibility project will have a straightforward, no frills report of the study and reproducibility results. These reports will be publicly available as supplementary material for the aggregate report(s) of the project as a whole.  Also, to maximize project integrity, the intro and methods will be written and critiqued in advance of your attempt to reproduce the results. Introductions can be just 1-2 paragraphs clarifying the main idea of the original study, the target finding for your reproducibility attempt, and any other essential information.  It will NOT have a literature review -- that is in the original publication. You can write both the introduction and the methods in past tense.  
 
 **Clarify key analysis of interest here**  You can also pre-specify additional analyses you plan to do.
 
@@ -42,7 +38,9 @@ Original dataset: https://github.com/FeiXu27/DelaFuente2021/blob/main/original_p
 ### Description of the steps required to reproduce the results
 
   First of all, I will refit the original GLMM. I need to clean the dataset by extracting the variables required for H1b and reconstruct individual session numbers with a unique ID. Next, I will fit the original H1b MCMCglmm model (Response variable: node degree; Predictor variables: Age + Sex * Exp_con; Random effects: Groups ID + Daily sessions) with an uninformative prior (V = 1, nu = 0.002). I will add residual prior (V = 1, nu = 0.002) to the prior to solve the singular error. I will then refit the original GLMM with an extra random effect of Individual ID.
-  To simulate the study, I need to first prepare three new variables ("Group_size", "max_share", and "not_shared"). Next, I will generate new node degree values (Animals_shared) by preserving the Sex * Exp_con effect and setting age effect = 0. To prevent generating node degree values that exceed the max_shared, I will use the upper-truncated Poisson model and set max_share < group - 1. Then, I will refit the simulated dataset with two models: first with the same MCMCglmm as the original, and a second extended model with the same model but adding Individual ID as another random effect. I will summarise the model and define "significant" result as p < 0.05 and 95% CI excluding 0. Finally, I will run the original and extended model 200 times with 100 different datasets and calculate the false positive rate of the age effect.
+  To simulate the study, I need to first prepare three new variables ("Group_size_session", "max_share", and "not_shared"). 
+  "Group_size_session" is defined as the maximum Animals_shared (of the session) + 1. "Max_shared" is defined as Group_size_session - 1. "Not_shared" is defined as Group_size_session - Animals_shared.
+  Next, I will generate new node degree values (Animals_shared) by preserving the posterior means from the extended model (both fixed effects and random effects) and setting age effect = 0. To prevent generating node degree values that exceed the max_shared, I will use the upper-truncated Poisson model and set Animals_shared <= Group_size_session - 1. Then, I will refit the simulated dataset with two models: first with the same MCMCglmm as the original, and a second extended model with the same model but adding Individual ID as another random effect. I will summarise the model and define "significant" result as p < 0.05 and 95% CI excluding 0. Finally, I will run the original and extended model 100 times and calculate the false positive rate of the age effect.
 
 ### Differences from original study
 
@@ -64,7 +62,7 @@ Original dataset: https://github.com/FeiXu27/DelaFuente2021/blob/main/original_p
 
   Data refitting: Done. I have refitted the original data with the original H1b model. In addition, I also fitted an extended model by adding individual ID as a random effect. Both yielded significant age effects.
   Prior choice: The author didn't respond. By adding residual variance in the prior, the singular error was resolved.
-  Data simulation: Done. I used 5 simulation datasets as pilot. The final result will include 1000 datasets. The datasets set age effect equals to 0. However, instead of doing a Binomial simulation, I kept the original Poisson model by adding a limit to the simulated Animals_shared <= group-1 (max_shared).
+  Data simulation: Done. I used 5 simulation datasets as pilot. The final result will include 100 datasets. The datasets set age effect equals to 0. However, instead of doing a Binomial simulation, I kept the original Poisson model by adding a limit to the simulated Animals_shared <= group_size_session - 1 (max_shared).
   Model fitting: Done. Both original and extended MCMCglmm was fitted.
   Model evaluation: My next step is to use 100 datasets instead of 5 once the simulation codes works fine.
 

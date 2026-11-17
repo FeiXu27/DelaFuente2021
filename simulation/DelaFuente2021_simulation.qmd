@@ -36,11 +36,11 @@ clean_data$Session_ID <- with(
 )
 
 clean_data <- clean_data %>%
-  group_by(Group, Condition) %>%
+  group_by(Session_ID) %>%
   mutate(
-    Group_size = n_distinct(Individual),
-    max_share = Group_size - 1,
-    not_shared = max_share - Animals_shared
+    group_size_session = max(Animals_shared) + 1,
+    max_share = group_size_session - 1,
+    not_shared = group_size_session - Animals_shared
   ) %>%
   ungroup()
 
@@ -55,10 +55,10 @@ clean_data <- clean_data %>%
 
 # prior with residual prior
 prior <- list(
-  R = list(V = 1, nu = 0.002),          # residual (overdispersion) variance
+  R = list(V = 1, nu = 0.002),
   G = list(
-    G1 = list(V = 1, nu = 0.002),       # Group
-    G2 = list(V = 1, nu = 0.002)        # Session_ID
+    G1 = list(V = 1, nu = 1, alpha.mu = 0, alpha.V = 1000), # Group
+    G2 = list(V = 1, nu = 1, alpha.mu = 0, alpha.V = 1000)  # Session_ID
   )
 )
 
@@ -84,9 +84,9 @@ summary(node_degree_origin)
 prior_ID <- list(
   R = list(V = 1, nu = 0.002),
   G = list(
-    G1 = list(V = 1, nu = 0.002),
-    G2 = list(V = 1, nu = 0.002), 
-    G3 = list(V = 1, nu = 0.002)   
+    G1 = list(V = 1, nu = 1, alpha.mu = 0, alpha.V = 1000), # Group
+    G2 = list(V = 1, nu = 1, alpha.mu = 0, alpha.V = 1000), # Session_ID
+    G3 = list(V = 1, nu = 1, alpha.mu = 0, alpha.V = 1000)  # Individual
   )
 )
 
@@ -111,49 +111,24 @@ summary(node_degree_origin_ID)
 ```{r}
 set.seed(456)
 
-nsim <- 5 ## change to 100 for final run
+nsim <- 5  # change to 100 for final run
+individual_var <- colMeans(node_degree_origin_ID$VCV)["Individual"]
 
-individual_var <- 0 #no individual random effect in the generating model
 base_data <- clean_data
 base_data$Individual <- factor(base_data$Individual)
 
-
-# 1. Generating parameters from the original MCMCglmm
 X <- model.matrix(
   ~ Age + Sex * Condition,
   data = base_data
 )
 
-# Preserve non-age coefficients
-beta <- colMeans(node_degree_origin$Sol)[colnames(X)]
+age_terms <- grep("^Age", colnames(X), value = TRUE)
 
-age_terms <- grep("^Age", names(beta), value = TRUE)
+upper <- base_data$max_share
 
 stopifnot(
   length(age_terms) > 0,
   nrow(X) == nrow(base_data),
-  all(is.finite(beta))
-)
-
-# Set all Age coefficients to zero
-beta[age_terms] <- 0
-
-# Preserve variance parameters
-v <- colMeans(node_degree_origin$VCV)
-
-variance_terms <- c("Group", "Session_ID", "units")
-
-stopifnot(
-  all(is.finite(v[variance_terms])),
-  all(v[variance_terms] >= 0),
-  length(individual_var) == 1,
-  is.finite(individual_var),
-  individual_var >= 0
-)
-
-upper <- base_data$Group_size - 1
-
-stopifnot(
   all(is.finite(upper)),
   all(upper >= 0),
   all(upper == floor(upper)),
@@ -162,22 +137,67 @@ stopifnot(
 )
 
 
-# 2. Generating simulated data
-# Draw one random intercept per unique ID
+# 1. Extract generating parameters from the EXTENDED model
+get_parameters <- function(fit, individual_variance) {
+
+  beta <- colMeans(fit$Sol)[colnames(X)]
+  v <- colMeans(fit$VCV)
+
+  variance_terms <- c("Group", "Session_ID", "units")
+
+  stopifnot(
+    all(is.finite(beta)),
+    all(variance_terms %in% names(v)),
+    all(is.finite(v[variance_terms])),
+    all(v[variance_terms] >= 0),
+    length(individual_variance) == 1,
+    is.finite(individual_variance),
+    individual_variance >= 0
+  )
+
+  # Null Age effect for false-positive-rate simulations
+  beta[age_terms] <- 0
+
+  list(
+    beta = beta,
+    group_var = unname(v["Group"]),
+    session_var = unname(v["Session_ID"]),
+    residual_var = unname(v["units"]),
+    individual_var = individual_variance
+  )
+}
+
+# All other parameters come from the extended model
+# fitted to the original dataset.
+parameters_generating <- get_parameters(
+  fit = node_degree_origin_ID,
+  individual_variance = individual_var
+)
+
+print(parameters_generating)
+
+
+# 2. Generate simulated data
 draw_intercepts <- function(id, variance) {
+
   id <- as.character(id)
   ids <- unique(id)
 
   effects <- setNames(
-    rnorm(length(ids), mean = 0, sd = sqrt(variance)),
+    rnorm(
+      length(ids),
+      mean = 0,
+      sd = sqrt(variance)
+    ),
     ids
   )
 
   unname(effects[id])
 }
 
-# Generated Animals_shared (<= group-1)
+# Upper-truncated Poisson: values from 0 to limit
 rtrunc_pois <- function(rate, limit) {
+
   if (limit == 0 || rate == 0) return(0)
 
   values <- seq.int(0, limit)
@@ -199,14 +219,20 @@ rtrunc_pois <- function(rate, limit) {
   ]
 }
 
-generate_data <- function() {
+# Default allows your existing section 4 to call generate_data()
+generate_data <- function(parameters = parameters_generating) {
+
   dat <- base_data
 
-  eta <- drop(X %*% beta) +
-    draw_intercepts(dat$Group, v["Group"]) +
-    draw_intercepts(dat$Session_ID, v["Session_ID"]) +
-    draw_intercepts(dat$Individual, individual_var) +
-    rnorm(nrow(dat), mean = 0, sd = sqrt(v["units"]))
+  eta <- drop(X %*% parameters$beta) +
+    draw_intercepts(dat$Group, parameters$group_var) +
+    draw_intercepts(dat$Session_ID, parameters$session_var) +
+    draw_intercepts(dat$Individual, parameters$individual_var) +
+    rnorm(
+      nrow(dat),
+      mean = 0,
+      sd = sqrt(parameters$residual_var)
+    )
 
   lambda <- exp(eta)
 
@@ -220,23 +246,22 @@ generate_data <- function() {
 
   dat$not_shared <- dat$max_share - dat$Animals_shared
 
-  # Verify bounds
+  # Verify outcome bounds
   stopifnot(
     all(dat$Animals_shared >= 0),
     all(dat$Animals_shared <= upper),
     all(dat$not_shared >= 0)
   )
 
-  # Verify that other columns remain unchanged
+  # Verify other columns remain unchanged
   other_columns <- setdiff(
     names(base_data),
     c("Animals_shared", "not_shared")
   )
 
-  stopifnot(identical(
-    dat[other_columns],
-    base_data[other_columns]
-  ))
+  stopifnot(
+    identical(dat[other_columns], base_data[other_columns])
+  )
 
   dat
 }
@@ -331,26 +356,32 @@ summarise_performance <- function(results) {
 }
 
 
-# 4. Generate shared batch of simulated datasets
+# 4. Generate ONE shared batch from the extended model
 sim_datasets <- lapply(
   seq_len(nsim),
-  function(i) generate_data()
+  function(i) generate_data(
+    parameters = parameters_generating
+  )
 )
 
-# Inspect the first simulated dataset
+# Inspect generating parameters and first simulated dataset
+print(parameters_generating)
 head(sim_datasets[[1]])
+```
 
+```{r}
+ncores <- 2L
 
 # 5. Fit ORIGINAL MODEL to each simulated dataset
 # Random effects: Group + Session_ID
 
 set.seed(789)
 
-original_list <- vector("list", nsim)
+original_list <- parallel::mclapply(seq_len(nsim), function(i) {
 
-for (i in seq_len(nsim)) {
+  set.seed(789 + i)
 
-  original_list[[i]] <- tryCatch({
+  result <- tryCatch({
 
     fit_original <- MCMCglmm(
       Animals_shared ~ Age + Sex * Condition,
@@ -383,9 +414,13 @@ for (i in seq_len(nsim)) {
   if (i %% 10 == 0) {
     message("Original model: ", i, " / ", nsim)
   }
-}
+
+  result
+}, mc.cores = ncores)
 
 results_original <- bind_rows(original_list)
+
+saveRDS(results_original, "results_original.rds")
 
 # Present ORIGINAL MODEL results
 performance_original <- summarise_performance(results_original)
@@ -407,11 +442,11 @@ print(diagnostics_original)
 
 set.seed(101112)
 
-individual_list <- vector("list", nsim)
+individual_list <- parallel::mclapply(seq_len(nsim), function(i) {
 
-for (i in seq_len(nsim)) {
+  set.seed(101112 + i)
 
-  individual_list[[i]] <- tryCatch({
+  result <- tryCatch({
 
     fit_individual <- MCMCglmm(
       Animals_shared ~ Age + Sex * Condition,
@@ -444,10 +479,13 @@ for (i in seq_len(nsim)) {
   if (i %% 10 == 0) {
     message("Original + Individual: ", i, " / ", nsim)
   }
-}
+
+  result
+}, mc.cores = ncores)
 
 results_individual <- bind_rows(individual_list)
 
+saveRDS(results_individual, "results_individual.rds")
 
 # Present ORIGINAL MODEL + INDIVIDUAL results
 performance_individual <- summarise_performance(
