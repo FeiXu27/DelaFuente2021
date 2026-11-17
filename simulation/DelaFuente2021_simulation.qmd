@@ -64,7 +64,7 @@ prior <- list(
 
 set.seed(123)
 
-node_degree_origin <- MCMCglmm(
+node_degree_origin_MCMCglmm <- MCMCglmm(
   Animals_shared ~ Age + Sex * Condition,
   random = ~ Group + Session_ID,
   family = "poisson",
@@ -76,12 +76,12 @@ node_degree_origin <- MCMCglmm(
   verbose = TRUE
 )
 
-summary(node_degree_origin)
+summary(node_degree_origin_MCMCglmm)
 ```
 
 ### original GLMM + ID as random
 ```{r}
-prior_ID <- list(
+prior_extended <- list(
   R = list(V = 1, nu = 0.002),
   G = list(
     G1 = list(V = 1, nu = 1, alpha.mu = 0, alpha.V = 1000), # Group
@@ -92,27 +92,27 @@ prior_ID <- list(
 
 set.seed(123)
 
-node_degree_origin_ID <- MCMCglmm(
+node_degree_extended_MCMCglmm <- MCMCglmm(
   Animals_shared ~ Age + Sex * Condition,
   random = ~ Group + Session_ID + Individual, # add Individual in the random effects
   family = "poisson",
   data = clean_data,
-  prior = prior_ID,
+  prior = prior_extended,
   nitt = 230000,
   burnin = 30000,
   thin = 200,
   verbose = TRUE
 )
 
-summary(node_degree_origin_ID)
+summary(node_degree_extended_MCMCglmm)
 ```
 
 ## simulation
 ```{r}
 set.seed(456)
 
-nsim <- 5  # change to 100 for final run
-individual_var <- colMeans(node_degree_origin_ID$VCV)["Individual"]
+nsim <- 100  # change to 100 for final run
+individual_var <- colMeans(node_degree_extended_MCMCglmm$VCV)["Individual"]
 
 base_data <- clean_data
 base_data$Individual <- factor(base_data$Individual)
@@ -170,7 +170,7 @@ get_parameters <- function(fit, individual_variance) {
 # All other parameters come from the extended model
 # fitted to the original dataset.
 parameters_generating <- get_parameters(
-  fit = node_degree_origin_ID,
+  fit = node_degree_extended_MCMCglmm,
   individual_variance = individual_var
 )
 
@@ -219,7 +219,6 @@ rtrunc_pois <- function(rate, limit) {
   ]
 }
 
-# Default allows your existing section 4 to call generate_data()
 generate_data <- function(parameters = parameters_generating) {
 
   dat <- base_data
@@ -453,7 +452,7 @@ individual_list <- parallel::mclapply(seq_len(nsim), function(i) {
       random = ~ Group + Session_ID + Individual,
       family = "poisson",
       data = sim_datasets[[i]],
-      prior = prior_ID,
+      prior = prior_extended,
       nitt = 230000,
       burnin = 30000,
       thin = 200,
@@ -483,23 +482,89 @@ individual_list <- parallel::mclapply(seq_len(nsim), function(i) {
   result
 }, mc.cores = ncores)
 
-results_individual <- bind_rows(individual_list)
+results_extended <- bind_rows(individual_list)
 
-saveRDS(results_individual, "results_individual.rds")
+saveRDS(results_extended, "results_extended.rds")
 
 # Present ORIGINAL MODEL + INDIVIDUAL results
 performance_individual <- summarise_performance(
-  results_individual
+  results_extended
 )
 
 print(performance_individual, width = Inf)
 
 # Individual simulation results
-head(results_individual)
+head(results_extended)
 
 # Failed or low-ESS fits
-diagnostics_individual <- results_individual %>%
+diagnostics_extended <- results_extended %>%
   filter(!is.na(error) | low_ESS %in% TRUE)
 
-print(diagnostics_individual)
+print(diagnostics_extended)
 ```
+
+## plot
+```{r}
+plot_data <- bind_rows(
+  results_original %>% mutate(model = "Original"),
+  results_extended %>% mutate(model = "Extended")
+) %>%
+  mutate(
+    model = factor(model, levels = c("Original", "Extended")),
+    significance = factor(
+      if_else(significant, "Significant", "Non-significant"),
+      levels = c("Significant", "Non-significant")
+    )
+  ) %>%
+  count(model, term, significance, .drop = FALSE) %>%
+  group_by(model, term) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup()
+
+ggplot(
+  plot_data,
+  aes(x = model, y = proportion, fill = significance)
+) +
+  # Significant portion at the bottom
+  geom_col(
+    position = position_stack(reverse = TRUE),
+    width = 0.6
+  ) +
+  geom_text(
+    aes(label = if_else(
+      proportion > 0,
+      scales::percent(proportion, accuracy = 1),
+      ""
+    )),
+    position = position_stack(vjust = 0.5, reverse = TRUE),
+    color = "white",
+    size = 4
+  ) +
+  geom_hline(
+    yintercept = 0.05,
+    linetype = "dashed",
+    color = "black",
+    linewidth = 0.7
+  ) +
+  facet_wrap(~ term) +
+  scale_fill_manual(
+    values = c(
+      "Significant" = "#D55E00",
+      "Non-significant" = "#0072B2"
+    )
+  ) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    breaks = sort(unique(c(0.05, seq(0, 1, 0.2)))),
+    labels = scales::label_percent(),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  labs(
+    x = NULL,
+    y = "Proportion",
+    fill = NULL
+  ) +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "top")
+```
+
