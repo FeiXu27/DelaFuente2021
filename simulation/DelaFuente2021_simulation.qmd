@@ -546,11 +546,10 @@ ggplot(
     color = "black",
     linewidth = 0.7
   ) +
-  facet_wrap(~ term) +
   scale_fill_manual(
     values = c(
-      "Significant" = "#D55E00",
-      "Non-significant" = "#0072B2"
+    "Significant"     = "#F2C94C",
+    "Non-significant" = "#205C45"
     )
   ) +
   scale_y_continuous(
@@ -560,11 +559,13 @@ ggplot(
     expand = expansion(mult = c(0, 0.02))
   ) +
   labs(
+    title = "False-positive rate of age effect",
     x = NULL,
     y = "Proportion",
     fill = NULL
   ) +
-  theme_classic(base_size = 14) +
-  theme(legend.position = "top")
+  theme(
+  plot.title = element_text(hjust = 0.5)
+)
 ```
 
