@@ -363,6 +363,21 @@ sim_datasets <- lapply(
   )
 )
 
+## assert_that to check if generated Animals_shared <= max_share (group_size_session - 1)
+for (i in seq_along(sim_datasets)) {
+  dat <- sim_datasets[[i]]
+
+  assertthat::assert_that(
+    all(c("Animals_shared", "max_share") %in% names(dat)),
+    msg = sprintf("Dataset %d is missing Animals_shared or max_share.", i)
+  )
+
+  assertthat::assert_that(
+    all(dat$Animals_shared <= dat$max_share),
+    msg = sprintf("Dataset %d failed the Animals_shared < max_share check.", i)
+  )
+}
+
 # Inspect generating parameters and first simulated dataset
 print(parameters_generating)
 head(sim_datasets[[1]])
