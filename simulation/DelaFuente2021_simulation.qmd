@@ -559,7 +559,7 @@ ggplot(
     yintercept = 0.05,
     linetype = "dashed",
     color = "black",
-    linewidth = 0.7
+    linewidth = 0.5
   ) +
   scale_fill_manual(
     values = c(
