@@ -180,6 +180,18 @@ node_degree_extended_MCMCglmm <- MCMCglmm(
 summary(node_degree_extended_MCMCglmm)
 ```
 
+### original raw data plot
+```{r}
+ggplot(clean_data, aes(x = Age, y = Animals_shared)) +
+  geom_boxplot(width = 0.55, fill = "#A8C8B5", color = "#234D3C") +
+  scale_x_discrete(
+    limits = c("A", "J"),
+    labels = c("Adult", "Juvenile")
+  ) +
+  labs(x = "Age", y = "Animals shared") +
+  theme_classic(base_size = 14)
+```
+
 #### simulation
 ```{r}
 set.seed(456)
@@ -454,6 +466,21 @@ for (i in seq_along(sim_datasets)) {
 # Inspect generating parameters and first simulated dataset
 print(parameters_generating)
 head(sim_datasets[[1]])
+```
+
+```{r}
+# plot
+sim_plot_data <- bind_rows(sim_datasets, .id = "simulation") %>%
+  select(simulation, Age, Animals_shared)
+
+ggplot(sim_plot_data, aes(x = Age, y = Animals_shared)) +
+  geom_boxplot(width = 0.55, fill = "#A8C8B5", color = "#234D3C") +
+  scale_x_discrete(
+    limits = c("A", "J"),
+    labels = c("Adult", "Juvenile")
+  ) +
+  labs(x = "Age", y = "Animals shared") +
+  theme_classic(base_size = 14)
 ```
 
 ```{r}
