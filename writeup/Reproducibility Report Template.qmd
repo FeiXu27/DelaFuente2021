@@ -111,6 +111,7 @@ clean_data <- clean_data %>%
   ) %>%
   ungroup()
 
+##### frame data for MCMCglmm
 clean_data <- as.data.frame(clean_data)
 ```
 
@@ -119,6 +120,7 @@ clean_data <- as.data.frame(clean_data)
 #### run original GLMM 
 ##### original model
 ```{r}
+# convert to categories
 clean_data <- clean_data %>%
   mutate(across(c(Condition, Sex, Age, Group, Session_ID), factor))
 
@@ -133,6 +135,7 @@ prior <- list(
 
 set.seed(123)
 
+# original MCMCglmm
 node_degree_origin_MCMCglmm <- MCMCglmm(
   Animals_shared ~ Age + Sex * Condition,
   random = ~ Group + Session_ID,
@@ -161,6 +164,7 @@ prior_extended <- list(
 
 set.seed(123)
 
+# extended MCMCglmm (Individual)
 node_degree_extended_MCMCglmm <- MCMCglmm(
   Animals_shared ~ Age + Sex * Condition,
   random = ~ Group + Session_ID + Individual, # add Individual in the random effects
@@ -180,8 +184,8 @@ summary(node_degree_extended_MCMCglmm)
 ```{r}
 set.seed(456)
 
-nsim <- 100
-individual_var <- colMeans(node_degree_extended_MCMCglmm$VCV)["Individual"]
+nsim <- 100 # simulate 100 datasets
+individual_var <- colMeans(node_degree_extended_MCMCglmm$VCV)["Individual"] # individual effect set to extended model
 
 base_data <- clean_data
 base_data$Individual <- factor(base_data$Individual)
