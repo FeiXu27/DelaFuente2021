@@ -1,8 +1,11 @@
 ---
 title: "DelaFuente2021_simulation"
 author: "Fei Xu"
-format: html
-editor: visual
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+format:
+  html:
+    toc: true
+    toc_depth: 3
 ---
 
 ```{r}
